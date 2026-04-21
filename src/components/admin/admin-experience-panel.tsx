@@ -168,8 +168,9 @@ export function AdminExperiencePanel() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setForm((prev) => ({ ...prev, logo: reader.result }));
+      const nextLogo = reader.result;
+      if (typeof nextLogo === "string") {
+        setForm((prev) => ({ ...prev, logo: nextLogo }));
       }
     };
     reader.readAsDataURL(file);
