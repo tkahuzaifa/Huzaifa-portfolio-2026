@@ -27,7 +27,6 @@ const HOME_NAV_FINANCE = [
 const HOME_NAV_WEB = [
   { label: "Home", href: "/", type: "route" as const },
   { label: "Projects", href: "#projects", type: "hash" as const },
-  { label: "Experience", href: "#experience", type: "hash" as const },
   { label: "Testimonials", href: "#testimonials", type: "hash" as const },
   { label: "Skills", href: "#skills", type: "hash" as const },
   { label: "Contact", href: "#contact", type: "hash" as const },
