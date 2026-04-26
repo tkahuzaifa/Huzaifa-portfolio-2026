@@ -10,8 +10,6 @@ import {
 } from "@/lib/portfolio-api-client";
 import type { Profile } from "@/lib/profile";
 
-const STORAGE_KEY = "portfolio-projects-v1";
-
 export type PortfolioProject = Project & {
   id: string;
   category: Profile;
@@ -137,27 +135,6 @@ function seedProjects(): PortfolioProject[] {
 
 const PROJECT_SEED = seedProjects();
 
-function readStorage() {
-  if (typeof window === "undefined") return PROJECT_SEED;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return PROJECT_SEED;
-    const parsed = JSON.parse(raw) as PortfolioProject[];
-    if (!Array.isArray(parsed) || !parsed.length) return PROJECT_SEED;
-    const normalized = parsed
-      .map(normalizeProject)
-      .filter((item) => item.slug && (item.category === "web" || item.category === "finance"));
-    return normalized.length ? sortProjects(normalized) : PROJECT_SEED;
-  } catch {
-    return PROJECT_SEED;
-  }
-}
-
-function writeStorage(items: PortfolioProject[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 export function usePortfolioProjects() {
   const [items, setItems] = React.useState<PortfolioProject[]>(PROJECT_SEED);
   const [hydrated, setHydrated] = React.useState(false);
@@ -182,12 +159,11 @@ export function usePortfolioProjects() {
             )
         );
         setItems(normalized);
-        writeStorage(normalized);
         setHydrated(true);
         return;
       }
 
-      setItems(readStorage());
+      setItems(PROJECT_SEED);
       setHydrated(true);
     }
 
@@ -200,7 +176,6 @@ export function usePortfolioProjects() {
   const persist = React.useCallback((next: PortfolioProject[]) => {
     const sorted = sortProjects(next.map(normalizeProject));
     setItems(sorted);
-    writeStorage(sorted);
     void patchPortfolioToApi({ projects: sorted });
     return sorted;
   }, []);

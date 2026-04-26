@@ -6,6 +6,8 @@ import {
   writePortfolioFile,
 } from "@/lib/portfolio-file";
 
+export const dynamic = "force-dynamic";
+
 function sanitizeAppend(body: unknown): Omit<Testimonial, "id"> | null {
   if (!body || typeof body !== "object") return null;
   const record = body as Record<string, unknown>;
@@ -45,7 +47,13 @@ export async function POST(request: Request) {
   }
 
   const nextList = [newItem, ...list];
-  await writePortfolioFile({ ...current, testimonials: nextList });
+  try {
+    await writePortfolioFile({ ...current, testimonials: nextList });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to save testimonial.";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
 
   return NextResponse.json({ ok: true, testimonial: newItem });
 }

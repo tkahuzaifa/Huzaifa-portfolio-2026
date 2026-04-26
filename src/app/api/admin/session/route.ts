@@ -8,6 +8,8 @@ import {
   verifyAdminSessionToken,
 } from "@/lib/admin-session-server";
 
+export const dynamic = "force-dynamic";
+
 const COOKIE_OPTIONS = {
   httpOnly: true,
   sameSite: "lax" as const,

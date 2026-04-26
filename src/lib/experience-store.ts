@@ -8,8 +8,6 @@ import {
 } from "@/lib/portfolio-api-client";
 import type { Profile } from "@/lib/profile";
 
-const STORAGE_KEY = "portfolio-experiences-v1";
-
 export type ExperienceCategory = Profile;
 
 export type PortfolioExperience = {
@@ -137,43 +135,6 @@ function toSeedExperiences(): PortfolioExperience[] {
 
 const SEED_EXPERIENCES = sortExperiences(toSeedExperiences());
 
-function readStorage(): PortfolioExperience[] {
-  if (typeof window === "undefined") return SEED_EXPERIENCES;
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return SEED_EXPERIENCES;
-    const parsed = JSON.parse(raw) as PortfolioExperience[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return SEED_EXPERIENCES;
-
-    return sortExperiences(
-      parsed
-        .map((item) => ({
-          ...item,
-          highlights: normalizeList(item.highlights ?? []),
-          skills: normalizeList(item.skills ?? []),
-          company: item.company?.trim() ?? "",
-          location: item.location?.trim() ?? "",
-          description: item.description?.trim() ?? "",
-          toDate: item.isPresent ? "" : item.toDate ?? "",
-        }))
-        .filter(
-          (item) =>
-            (item.category === "finance" || item.category === "web") &&
-            item.title?.trim() &&
-            item.company?.trim()
-        )
-    );
-  } catch {
-    return SEED_EXPERIENCES;
-  }
-}
-
-function writeStorage(items: PortfolioExperience[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 export function formatMonth(value: string) {
   if (!value) return "";
   const [year, month] = value.split("-");
@@ -234,12 +195,11 @@ export function usePortfolioExperiences() {
             )
         );
         setItems(normalized);
-        writeStorage(normalized);
         setHydrated(true);
         return;
       }
 
-      setItems(readStorage());
+      setItems(SEED_EXPERIENCES);
       setHydrated(true);
     }
 
@@ -252,7 +212,6 @@ export function usePortfolioExperiences() {
   const persist = React.useCallback((next: PortfolioExperience[]) => {
     const sorted = sortExperiences(next);
     setItems(sorted);
-    writeStorage(sorted);
     void patchPortfolioToApi({ experiences: sorted });
     return sorted;
   }, []);
@@ -309,7 +268,6 @@ export function usePortfolioExperiences() {
 
   const resetToSeed = React.useCallback(() => {
     setItems(SEED_EXPERIENCES);
-    writeStorage(SEED_EXPERIENCES);
     void patchPortfolioToApi({ experiences: SEED_EXPERIENCES });
   }, []);
 

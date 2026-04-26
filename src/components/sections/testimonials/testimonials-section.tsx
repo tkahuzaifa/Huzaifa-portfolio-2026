@@ -13,7 +13,6 @@ import {
   patchPortfolioToApi,
 } from "@/lib/portfolio-api-client";
 
-const STORAGE_KEY = "huzaifa:testimonials";
 const ADMIN_QUERY_KEY = "admin";
 
 function sanitizeTestimonials(value: unknown): Testimonial[] | null {
@@ -53,6 +52,7 @@ export function TestimonialsSection() {
   const [role, setRole] = React.useState("");
   const [quote, setQuote] = React.useState("");
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const [submitError, setSubmitError] = React.useState("");
 
   React.useEffect(() => {
     const adminParam = searchParams.get(ADMIN_QUERY_KEY);
@@ -72,11 +72,6 @@ export function TestimonialsSection() {
           const cleaned = sanitizeTestimonials(raw);
           if (cleaned) {
             setTestimonials(cleaned);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
-            } catch {
-              // Ignore storage errors.
-            }
             return;
           }
           setTestimonials(DEFAULT_TESTIMONIALS);
@@ -84,15 +79,7 @@ export function TestimonialsSection() {
         }
       }
 
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw) as unknown;
-        const cleaned = sanitizeTestimonials(parsed);
-        if (cleaned) setTestimonials(cleaned);
-      } catch {
-        // Ignore storage errors.
-      }
+      setTestimonials(DEFAULT_TESTIMONIALS);
     }
 
     void load();
@@ -101,28 +88,18 @@ export function TestimonialsSection() {
     };
   }, []);
 
-  function persistLocal(next: Testimonial[]) {
+  function setTestimonialsOnly(next: Testimonial[]) {
     setTestimonials(next);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Ignore storage errors.
-    }
   }
 
   function handleClear() {
     setTestimonials(DEFAULT_TESTIMONIALS);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Ignore storage errors.
-    }
     void patchPortfolioToApi({ testimonials: DEFAULT_TESTIMONIALS });
   }
 
   function handleDelete(id: string) {
     const next = testimonials.filter((item) => item.id !== id);
-    persistLocal(next);
+    setTestimonialsOnly(next);
     if (isAdmin) {
       void patchPortfolioToApi({ testimonials: next });
     }
@@ -130,6 +107,7 @@ export function TestimonialsSection() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmitError("");
     const trimmedName = name.trim();
     const trimmedQuote = quote.trim();
     const trimmedRole = role.trim();
@@ -149,29 +127,17 @@ export function TestimonialsSection() {
       if (res.ok) {
         const data = (await res.json()) as { testimonial?: Testimonial };
         if (data.testimonial) {
-          const merged = [data.testimonial, ...testimonials];
-          persistLocal(merged);
+          setTestimonialsOnly([data.testimonial, ...testimonials]);
           setName("");
           setRole("");
           setQuote("");
           return;
         }
       }
+      setSubmitError("Could not save. Check that Vercel Blob is connected.");
     } catch {
-      // Fall back to local-only persistence.
+      setSubmitError("Could not save. Try again.");
     }
-
-    const next: Testimonial = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      name: trimmedName,
-      role: trimmedRole,
-      quote: trimmedQuote,
-    };
-
-    persistLocal([next, ...testimonials]);
-    setName("");
-    setRole("");
-    setQuote("");
   }
 
   return (
@@ -248,6 +214,10 @@ export function TestimonialsSection() {
               onChange={(event) => setQuote(event.target.value)}
               required
             />
+
+            {submitError ? (
+              <p className="text-sm text-destructive">{submitError}</p>
+            ) : null}
 
             <div className="flex flex-wrap gap-2 pt-2">
               <Button className="rounded-xl" type="submit">

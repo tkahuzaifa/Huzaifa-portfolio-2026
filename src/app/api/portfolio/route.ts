@@ -11,6 +11,8 @@ import {
   type PortfolioPersistedState,
 } from "@/lib/portfolio-file";
 
+export const dynamic = "force-dynamic";
+
 async function isAdminRequest(): Promise<boolean> {
   const store = await cookies();
   const token = store.get(ADMIN_COOKIE_NAME)?.value ?? "";
@@ -45,6 +47,12 @@ export async function PATCH(request: Request) {
   if ("experiences" in patch) next.experiences = patch.experiences;
   if ("testimonials" in patch) next.testimonials = patch.testimonials;
 
-  await writePortfolioFile(next);
+  try {
+    await writePortfolioFile(next);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to save portfolio data.";
+    return NextResponse.json({ error: message }, { status: 503 });
+  }
   return NextResponse.json({ ok: true });
 }
