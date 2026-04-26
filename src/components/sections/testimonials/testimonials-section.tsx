@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_TESTIMONIALS, type Testimonial } from "@/data/testimonials";
+import {
+  fetchPortfolioFromApi,
+  patchPortfolioToApi,
+} from "@/lib/portfolio-api-client";
 
 const STORAGE_KEY = "huzaifa:testimonials";
 const ADMIN_QUERY_KEY = "admin";
@@ -51,21 +55,53 @@ export function TestimonialsSection() {
   const [isAdmin, setIsAdmin] = React.useState(false);
 
   React.useEffect(() => {
-    try {
-      const adminParam = searchParams.get(ADMIN_QUERY_KEY);
-      setIsAdmin(adminParam === "1" || adminParam === "true");
-
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as unknown;
-      const cleaned = sanitizeTestimonials(parsed);
-      if (cleaned) setTestimonials(cleaned);
-    } catch {
-      // Ignore storage errors.
-    }
+    const adminParam = searchParams.get(ADMIN_QUERY_KEY);
+    setIsAdmin(adminParam === "1" || adminParam === "true");
   }, [searchParams]);
 
-  function persist(next: Testimonial[]) {
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const api = await fetchPortfolioFromApi();
+      if (cancelled) return;
+
+      if (Object.prototype.hasOwnProperty.call(api, "testimonials")) {
+        const raw = api.testimonials;
+        if (Array.isArray(raw)) {
+          const cleaned = sanitizeTestimonials(raw);
+          if (cleaned) {
+            setTestimonials(cleaned);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+            } catch {
+              // Ignore storage errors.
+            }
+            return;
+          }
+          setTestimonials(DEFAULT_TESTIMONIALS);
+          return;
+        }
+      }
+
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw) as unknown;
+        const cleaned = sanitizeTestimonials(parsed);
+        if (cleaned) setTestimonials(cleaned);
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function persistLocal(next: Testimonial[]) {
     setTestimonials(next);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
@@ -81,19 +117,49 @@ export function TestimonialsSection() {
     } catch {
       // Ignore storage errors.
     }
+    void patchPortfolioToApi({ testimonials: DEFAULT_TESTIMONIALS });
   }
 
   function handleDelete(id: string) {
-    persist(testimonials.filter((item) => item.id !== id));
+    const next = testimonials.filter((item) => item.id !== id);
+    persistLocal(next);
+    if (isAdmin) {
+      void patchPortfolioToApi({ testimonials: next });
+    }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedQuote = quote.trim();
     const trimmedRole = role.trim();
 
     if (!trimmedName || !trimmedQuote) return;
+
+    try {
+      const res = await fetch("/api/portfolio/testimonials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          role: trimmedRole,
+          quote: trimmedQuote,
+        }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { testimonial?: Testimonial };
+        if (data.testimonial) {
+          const merged = [data.testimonial, ...testimonials];
+          persistLocal(merged);
+          setName("");
+          setRole("");
+          setQuote("");
+          return;
+        }
+      }
+    } catch {
+      // Fall back to local-only persistence.
+    }
 
     const next: Testimonial = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -102,7 +168,7 @@ export function TestimonialsSection() {
       quote: trimmedQuote,
     };
 
-    persist([next, ...testimonials]);
+    persistLocal([next, ...testimonials]);
     setName("");
     setRole("");
     setQuote("");

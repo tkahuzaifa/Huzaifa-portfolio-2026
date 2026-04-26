@@ -1,29 +1,73 @@
 const ADMIN_SESSION_KEY = "portfolio-admin-session";
 
 /**
- * Frontend-only credential gate for the hidden admin panel.
- * Replace these with your own values before going live.
+ * Client-side flag mirrored after successful cookie login.
+ * The real auth for saving data is the httpOnly cookie set by `/api/admin/session`.
  */
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "admin123";
-
-export function isAdminAuthenticated() {
+export function isAdminAuthenticated(): boolean {
   if (typeof window === "undefined") return false;
   return window.sessionStorage.getItem(ADMIN_SESSION_KEY) === "true";
 }
 
-export function loginAdmin(username: string, password: string) {
-  const isValid =
-    username.trim() === ADMIN_USERNAME && password === ADMIN_PASSWORD;
+export async function loginAdmin(
+  username: string,
+  password: string
+): Promise<boolean> {
+  try {
+    const res = await fetch("/api/admin/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        username: username.trim(),
+        password,
+      }),
+    });
 
-  if (typeof window !== "undefined" && isValid) {
-    window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    if (!res.ok) return false;
+
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    }
+    return true;
+  } catch {
+    return false;
   }
-
-  return isValid;
 }
 
-export function logoutAdmin() {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+export async function logoutAdmin(): Promise<void> {
+  try {
+    await fetch("/api/admin/session", {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } catch {
+    // ignore
+  } finally {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    }
+  }
+}
+
+/**
+ * Sync sessionStorage from the httpOnly admin cookie (e.g. after refresh or new tab).
+ */
+export async function refreshAdminSession(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/admin/session", {
+      credentials: "include",
+    });
+    const data = (await res.json()) as { ok?: boolean };
+    if (data.ok && typeof window !== "undefined") {
+      window.sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+  if (typeof window !== "undefined") {
+    window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  }
+  return false;
 }

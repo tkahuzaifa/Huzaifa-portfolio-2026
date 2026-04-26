@@ -18,7 +18,11 @@ import {
   type PortfolioExperience,
   usePortfolioExperiences,
 } from "@/lib/experience-store";
-import { isAdminAuthenticated, loginAdmin, logoutAdmin } from "@/lib/admin-auth";
+import {
+  loginAdmin,
+  logoutAdmin,
+  refreshAdminSession,
+} from "@/lib/admin-auth";
 import { renderRichTextToHtml } from "@/lib/rich-text";
 
 type FormState = ExperienceFormInput & {
@@ -86,8 +90,16 @@ export function AdminExperiencePanel() {
     usePortfolioExperiences();
 
   React.useEffect(() => {
-    setIsAuthenticated(isAdminAuthenticated());
-    setIsCheckingAuth(false);
+    let cancelled = false;
+    void (async () => {
+      const ok = await refreshAdminSession();
+      if (cancelled) return;
+      setIsAuthenticated(ok);
+      setIsCheckingAuth(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function resetForm(nextCategory: ExperienceCategory = form.category) {
@@ -104,9 +116,9 @@ export function AdminExperiencePanel() {
     setFormError("");
   }
 
-  function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const ok = loginAdmin(username, password);
+    const ok = await loginAdmin(username, password);
     if (!ok) {
       setAuthError("Invalid admin credentials.");
       return;
@@ -118,7 +130,7 @@ export function AdminExperiencePanel() {
   }
 
   function handleLogout() {
-    logoutAdmin();
+    void logoutAdmin();
     setIsAuthenticated(false);
     setUsername("");
     setPassword("");

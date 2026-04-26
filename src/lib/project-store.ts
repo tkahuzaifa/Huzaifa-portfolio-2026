@@ -4,6 +4,10 @@ import * as React from "react";
 
 import type { Project } from "@/components/projects/types";
 import { financeProjects, webDevelopmentProjects } from "@/data/projects";
+import {
+  fetchPortfolioFromApi,
+  patchPortfolioToApi,
+} from "@/lib/portfolio-api-client";
 import type { Profile } from "@/lib/profile";
 
 const STORAGE_KEY = "portfolio-projects-v1";
@@ -159,14 +163,45 @@ export function usePortfolioProjects() {
   const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
-    setItems(readStorage());
-    setHydrated(true);
+    let cancelled = false;
+
+    async function load() {
+      const api = await fetchPortfolioFromApi();
+      if (cancelled) return;
+
+      if (Object.prototype.hasOwnProperty.call(api, "projects")) {
+        const raw = api.projects;
+        const list = Array.isArray(raw) ? raw : [];
+        const normalized = sortProjects(
+          list
+            .map((item) => normalizeProject(item as PortfolioProject))
+            .filter(
+              (item) =>
+                item.slug &&
+                (item.category === "web" || item.category === "finance")
+            )
+        );
+        setItems(normalized);
+        writeStorage(normalized);
+        setHydrated(true);
+        return;
+      }
+
+      setItems(readStorage());
+      setHydrated(true);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persist = React.useCallback((next: PortfolioProject[]) => {
     const sorted = sortProjects(next.map(normalizeProject));
     setItems(sorted);
     writeStorage(sorted);
+    void patchPortfolioToApi({ projects: sorted });
     return sorted;
   }, []);
 

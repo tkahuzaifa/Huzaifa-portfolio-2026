@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { isAdminAuthenticated } from "@/lib/admin-auth";
+import { refreshAdminSession } from "@/lib/admin-auth";
 import {
   filterProjectsByProfile,
   type PortfolioProject,
@@ -132,8 +132,16 @@ export function AdminProjectPanel() {
   const { items, hydrated, addProject, updateProject, deleteProject } = usePortfolioProjects();
 
   React.useEffect(() => {
-    setIsAuthed(isAdminAuthenticated());
-    setIsAuthChecked(true);
+    let cancelled = false;
+    void (async () => {
+      const ok = await refreshAdminSession();
+      if (cancelled) return;
+      setIsAuthed(ok);
+      setIsAuthChecked(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const visibleProjects = React.useMemo(

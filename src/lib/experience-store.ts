@@ -2,6 +2,10 @@
 
 import * as React from "react";
 import { experience as financeSeedData } from "@/data/experience";
+import {
+  fetchPortfolioFromApi,
+  patchPortfolioToApi,
+} from "@/lib/portfolio-api-client";
 import type { Profile } from "@/lib/profile";
 
 const STORAGE_KEY = "portfolio-experiences-v1";
@@ -197,15 +201,59 @@ export function usePortfolioExperiences() {
   const [hydrated, setHydrated] = React.useState(false);
 
   React.useEffect(() => {
-    const stored = readStorage();
-    setItems(stored);
-    setHydrated(true);
+    let cancelled = false;
+
+    async function load() {
+      const api = await fetchPortfolioFromApi();
+      if (cancelled) return;
+
+      if (Object.prototype.hasOwnProperty.call(api, "experiences")) {
+        const raw = api.experiences;
+        const list = Array.isArray(raw) ? raw : [];
+        const normalized = sortExperiences(
+          list
+            .map((item) => ({
+              ...item,
+              highlights: normalizeList(
+                (item as PortfolioExperience).highlights ?? []
+              ),
+              skills: normalizeList((item as PortfolioExperience).skills ?? []),
+              company: (item as PortfolioExperience).company?.trim() ?? "",
+              location: (item as PortfolioExperience).location?.trim() ?? "",
+              description:
+                (item as PortfolioExperience).description?.trim() ?? "",
+              toDate: (item as PortfolioExperience).isPresent
+                ? ""
+                : (item as PortfolioExperience).toDate ?? "",
+            }))
+            .filter(
+              (item) =>
+                (item.category === "finance" || item.category === "web") &&
+                item.title?.trim() &&
+                item.company?.trim()
+            )
+        );
+        setItems(normalized);
+        writeStorage(normalized);
+        setHydrated(true);
+        return;
+      }
+
+      setItems(readStorage());
+      setHydrated(true);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const persist = React.useCallback((next: PortfolioExperience[]) => {
     const sorted = sortExperiences(next);
     setItems(sorted);
     writeStorage(sorted);
+    void patchPortfolioToApi({ experiences: sorted });
     return sorted;
   }, []);
 
@@ -262,6 +310,7 @@ export function usePortfolioExperiences() {
   const resetToSeed = React.useCallback(() => {
     setItems(SEED_EXPERIENCES);
     writeStorage(SEED_EXPERIENCES);
+    void patchPortfolioToApi({ experiences: SEED_EXPERIENCES });
   }, []);
 
   return {

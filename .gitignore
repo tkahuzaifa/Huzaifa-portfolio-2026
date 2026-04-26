@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# Server-persisted portfolio edits (local / self-hosted)
+/data/portfolio.json
+
 # debug
 npm-debug.log*
 yarn-debug.log*
